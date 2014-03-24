@@ -32,6 +32,9 @@ struct arguments{
 	int sel;	
 	char * redir_s; //special redirection/pipe symbol 
 	int c;	
+	char *cmd1;
+	char *cmd2;
+	int rplace;
 } ar;
 
 int isRedir(char* arg)
@@ -42,21 +45,25 @@ int isRedir(char* arg)
 		case '>':
 			if(arg[1] == '>')
 			{
-				ar.sel = 1;
-				act = 1;
+				fprintf(stderr, "case: %c\n", arg[0]);
+				ar.sel = 3;
+				act = 3;
 			}
 			else
 			{
-				ar.sel = 3;
-				act = 3;
+				fprintf(stderr, "case: %c\n", arg[0]);			
+				ar.sel = 1;
+				act = 1;
 			}
 			
 			break;	
 		case '1':
+			fprintf(stderr, "case: %c\n", arg[0]);		
 			ar.sel = 1;
 			act = 1;
 			break;
 		case '2':
+			fprintf(stderr, "case: %c\n", arg[0]);
 			if(arg[1] == '>' && arg[2] == '>')
 			{
 				ar.sel = 4;
@@ -70,58 +77,65 @@ int isRedir(char* arg)
 			
 			break;
 		case '&':
+			fprintf(stderr, "case: %c\n", arg[0]);		
 			ar.sel = 5;
 			act = 5;
 			break;
 		case '<':
+			fprintf(stderr, "case: %c\n", arg[0]);		
 			ar.sel = 6;
 			act = 6;
 			break;
 		case '|':
+			fprintf(stderr, "case: %c\n", arg[0]);		
 			ar.sel = 7;
 			act = 7;
 			break;
 		default:
+			fprintf(stderr, "Default Entered\n");		
 			ar.sel = 0;
 			act = 0;
 			break;
-			
 	}
+	
+
 
 return act;
 }
 
-int doarg(char **argv, char **argv2)
+int doarg(char **argv, int act)
 {
        int fd;
        int fd2[2];
        pid_t pid, pid2;
-        pid = fork();
+       char ** argv2;
+       fprintf(stderr, "argv[0]:%s, placement:%d, aact:%d, argv[3]:%s \n", argv[0], ar.rplace, act, argv[ar.rplace+1]);
+       
+       
+       pid = fork();
+  
         if (pid < 0){
             printf("Fork Failed\n");
         }
         else if (pid == 0) // child process 
         { 
-        	switch(ar.sel)
+        	switch(act)
         	{
-        		case 0://
-        			setpgid(0,0);
-	 			if(execvp(argv[0], argv) == -1)
-				{
-				   fprintf(stderr, "%s is not a valid command\n",argv[0]);
-	 			   exit(EXIT_FAILURE);
-				}
+        		case 0:// no redirection or pipes
+        			setpgid(0,0);          			
+	 			execvp(argv[0], argv);
 				break;
-      			case 1://
-             			fd = open(argv2[0], O_CREAT | O_WRONLY , S_IRUSR | S_IWUSR | S_IXUSR);
+      			case 1:// > or a 1>
+	      			setpgid(0,0);
+       fprintf(stderr, "argv[0]:%s, a[1]:%s, argv[2]:%s \n", argv[0], argv[1], argv[ar.rplace+1]); 	      			
+             			fd = open(argv[ar.rplace+1], O_CREAT | O_WRONLY , S_IRUSR | S_IWUSR | S_IXUSR);
               			dup2(fd,1); 
-	 			if(execvp(argv[0], argv) == -1)
-				{
-				   fprintf(stderr, "%s is not a valid command\n",argv[0]);
-	 			   exit(EXIT_FAILURE);
-				}                            
+                 		argv[1] = '\0';
+              			argv[2] = '\0';             			
+	 			execvp(argv[0], argv);
+                       
 				break;   		
-        		case 2://
+        		case 2://2>
              		        fd = open(argv2[0], O_CREAT | O_WRONLY , S_IRUSR | S_IWUSR | S_IXUSR);
               			dup2(fd,2);        	
   	 			if(execvp(argv[0], argv) == -1)
@@ -130,28 +144,28 @@ int doarg(char **argv, char **argv2)
 	 			   exit(EXIT_FAILURE);
 	 			}
 	 			break;               	
-        		case 3://
+        		case 3://>>
                 		fd = open(argv2[0], O_CREAT | O_WRONLY | O_APPEND , S_IRUSR | S_IWUSR | S_IXUSR);
                			dup2(fd,1);        		
                 		execvp(argv[0], argv); 
                 		break;
-        		case 4://
+        		case 4://2>>
         			fd = open(argv2[0], O_CREAT | O_WRONLY | O_APPEND , S_IRUSR | S_IWUSR | S_IXUSR);
                 		dup2(fd,2);
                			execvp(argv[0], argv);
                			break;
-        		case 5://
+        		case 5://&
 				fd = open(argv2[0], O_CREAT | O_WRONLY , S_IRUSR | S_IWUSR | S_IXUSR);
 				dup2(fd,1);
 				dup2(fd,2);
 				execvp(argv[0], argv);       
 				break;		
-        		case 6://
+        		case 6:// <
 				fd = open(argv2[0], O_CREAT | O_RDONLY , S_IRUSR | S_IWUSR | S_IXUSR);
 				dup2(fd,0);
 				execvp(argv[0], argv); 
 				break;    		
-        		case 7://
+        		case 7:// |
 				pipe(fd2);
 				pid2 = fork();
 				if (pid2 < 0){
@@ -173,13 +187,24 @@ int doarg(char **argv, char **argv2)
         		
 		}
 	}
+	else if (ar.sel != 5){ /* parent process */
+	printf("running parent\n");
+            pid_t childpid;
+            int status;
+            childpid = wait(&status); //wait the child process to finish
+            if (childpid < 0){
+                printf("wait error");
+                exit(1);
+            }
+        }
+     return 0;   
 }
 
 
 int count_args(char* line)
 {
    int words=0, in_word=0;  
-
+   int redirect = 0;
    while(*line)
    {
       if(isspace(*line))
@@ -190,8 +215,12 @@ int count_args(char* line)
       {
 	 if(in_word == 0)
 	 {
-	    words++;
-	    in_word = 1;
+//	    redirect = isRedir(line);
+//	    if(redirect == 0)
+//	    {
+	      words++;
+	      in_word = 1;
+//	    }
 	 }
       }
       line++;
@@ -200,14 +229,15 @@ int count_args(char* line)
 }
 
 
-char **build_argv(char* line)
+char **build_argv(char* line, int *act)
 {
    int argc = count_args(line);
    ar.c = argc;
-   int i, act;
+   int i, fdone; fdone = 0; 
    char *new;
    char **argv;
-
+   int arg_count = 0;
+   int final = 0;
    if(argc ==0)
    {
       return NULL;
@@ -222,32 +252,41 @@ char **build_argv(char* line)
 
    for(i=0; i<argc; i++)
    {
-      while(isspace(*line))
-      {
-	 line++;
-      }
-      for(new=line; *new && !isspace(*new); new++);
-      /* Empty body */
-      *new = '\0';
-      argv[i] = malloc(strlen(line)+1);
-      if(!argv)
-      {
-         fprintf(stderr, "malloc() failure -- out of memory");
-         exit(EXIT_FAILURE);
-      }
-      act = isRedir(line);
-      if(ar.sel != act)
-      {
-      	 fprintf(stderr, "Act != ar.sel");
-      }
-      if(ar.sel == 0 )
-      {
-      	strcpy(argv[i], line);
-      }
+ 	      *act = isRedir(line);
+ 	      if(ar.sel != act)
+	      {    fprintf(stderr, "Act != ar.sel\n");	      }
 
-      line = new+1;
+	      while(isspace(*line))
+	      {
+		 line++;
+	      }
+	      for(new=line; *new && !isspace(*new)/* && (act == 0)*/; new++);
+	      /* Empty body */
+	      *new = '\0';
+	      argv[i] = malloc(strlen(line)+1);
+	      if(!argv)
+	      {
+		 fprintf(stderr, "malloc() failure -- out of memory\n");
+		 exit(EXIT_FAILURE);
+	      }
+	      fprintf(stderr, "argc %d\n", argc);
+	      
+	      if(ar.sel == 0 )
+	      {
+	      	strcpy(argv[i], line);
+	      	arg_count++;
+	      }
+	      else
+	      {
+	      	ar.rplace = i;
+	        fprintf(stderr, "sel is:%d   Line is:%s\n",ar.sel,line);
+		final = ar.sel;
+	      }
+	      line = new+1;
    }
    argv[i] = NULL;
+   ar.c = arg_count;
+   *act = final;
    return argv;
 }
 
@@ -269,7 +308,7 @@ int main(void)
    char  line[MAX_LINE];
    char  *line_res;
    char **argv;
-   
+   int act = 0;
    while(1)
    {
 //      ar.pval = "~/Git/RPI-SHELL/";
@@ -280,10 +319,12 @@ int main(void)
       {	 break;  }
  //     gopt(ar.c,argv);      
  
-      argv = build_argv(line);    
+      argv = build_argv(line, &act);    
+      fprintf(stderr,"act is ====%d",act);
       print_argv(argv);
       
-//      doarg(argv, argv);
+      doarg(argv, act);
+ /*
       child_pid = fork();
       if(child_pid == -1)
       {
@@ -309,9 +350,9 @@ int main(void)
 	 }
 	 free(argv);
       }  
-      
+     */    
    }
-   
+
    return EXIT_SUCCESS;
 }
 //-----------------------------------------------------------------------------
