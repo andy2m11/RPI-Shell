@@ -5,6 +5,10 @@
 #include <sys/wait.h>
 #include <unistd.h>
 #include <errno.h>
+#include  <signal.h>
+#include  <sys/types.h>
+#include  <fcntl.h>
+
 #define MAX_LINE 1024
 /*
 cmd > file Redirect the standard output (stdout) of cmd to a file
@@ -26,7 +30,8 @@ struct arguments{
 	int lc;		//redirect contents of file to stdin
 	int pipe;	//redirect stdout of cm1 to stdin of cmd2
 	int sel;	
-	char * redir_s; //special redirection/pipe symbol 	
+	char * redir_s; //special redirection/pipe symbol 
+	int c;	
 } ar;
 
 int isRedir(char* arg)
@@ -80,19 +85,23 @@ int isRedir(char* arg)
 			ar.sel = 0;
 			act = 0;
 			break;
+			
+	}
 
 return act;
 }
 
-int doarg()
+int doarg(char **argv, char **argv2)
 {
        int fd;
+       int fd2[2];
+       pid_t pid, pid2;
         pid = fork();
         if (pid < 0){
             printf("Fork Failed\n");
         }
-        else if (pid == 0) { /* child process */
-        
+        else if (pid == 0) // child process 
+        { 
         	switch(ar.sel)
         	{
         		case 0://
@@ -127,9 +136,9 @@ int doarg()
                 		execvp(argv[0], argv); 
                 		break;
         		case 4://
-        			file = open(argv2[0], O_CREAT | O_WRONLY | O_APPEND , S_IRUSR | S_IWUSR | S_IXUSR);
-                		dup2(file,2);
-               			execvp(argsv[0], argsv);
+        			fd = open(argv2[0], O_CREAT | O_WRONLY | O_APPEND , S_IRUSR | S_IWUSR | S_IXUSR);
+                		dup2(fd,2);
+               			execvp(argv[0], argv);
                			break;
         		case 5://
 				fd = open(argv2[0], O_CREAT | O_WRONLY , S_IRUSR | S_IWUSR | S_IXUSR);
@@ -143,7 +152,6 @@ int doarg()
 				execvp(argv[0], argv); 
 				break;    		
         		case 7://
-				int fd2[2];
 				pipe(fd2);
 				pid2 = fork();
 				if (pid2 < 0){
@@ -161,10 +169,12 @@ int doarg()
 				    execvp(argv2[0], argv2);   
 				}   
 				break;  		
-        		default:
+        		//default:
         		
 		}
+	}
 }
+
 
 int count_args(char* line)
 {
@@ -273,7 +283,7 @@ int main(void)
       argv = build_argv(line);    
       print_argv(argv);
       
-      
+//      doarg(argv, argv);
       child_pid = fork();
       if(child_pid == -1)
       {
@@ -304,7 +314,6 @@ int main(void)
    
    return EXIT_SUCCESS;
 }
-
 //-----------------------------------------------------------------------------
 
 
