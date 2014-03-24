@@ -4,8 +4,6 @@
 #include <string.h>
 #include <sys/wait.h>
 #include <unistd.h>
-#include <sys/stat.h> 
-#include <dirent.h>
 #include <errno.h>
 #define MAX_LINE 1024
 /*
@@ -27,9 +25,146 @@ struct arguments{
 	int rcand;	//redirect stdout and stderr to file
 	int lc;		//redirect contents of file to stdin
 	int pipe;	//redirect stdout of cm1 to stdin of cmd2
+	int sel;	
 	char * redir_s; //special redirection/pipe symbol 	
 } ar;
 
+int isRedir(char* arg)
+{
+	int act = 0;
+	switch(arg[0])
+	{
+		case '>':
+			if(arg[1] == '>')
+			{
+				ar.sel = 1;
+				act = 1;
+			}
+			else
+			{
+				ar.sel = 3;
+				act = 3;
+			}
+			
+			break;	
+		case '1':
+			ar.sel = 1;
+			act = 1;
+			break;
+		case '2':
+			if(arg[1] == '>' && arg[2] == '>')
+			{
+				ar.sel = 4;
+				act = 4;
+			}
+			else
+			{
+				ar.sel = 2;
+				act = 2;
+			}
+			
+			break;
+		case '&':
+			ar.sel = 5;
+			act = 5;
+			break;
+		case '<':
+			ar.sel = 6;
+			act = 6;
+			break;
+		case '|':
+			ar.sel = 7;
+			act = 7;
+			break;
+		default:
+			ar.sel = 0;
+			act = 0;
+			break;
+
+return act;
+}
+
+int doarg()
+{
+       int fd;
+        pid = fork();
+        if (pid < 0){
+            printf("Fork Failed\n");
+        }
+        else if (pid == 0) { /* child process */
+        
+        	switch(ar.sel)
+        	{
+        		case 0://
+        			setpgid(0,0);
+	 			if(execvp(argv[0], argv) == -1)
+				{
+				   fprintf(stderr, "%s is not a valid command\n",argv[0]);
+	 			   exit(EXIT_FAILURE);
+				}
+				break;
+      			case 1://
+             			fd = open(argv2[0], O_CREAT | O_WRONLY , S_IRUSR | S_IWUSR | S_IXUSR);
+              			dup2(fd,1); 
+	 			if(execvp(argv[0], argv) == -1)
+				{
+				   fprintf(stderr, "%s is not a valid command\n",argv[0]);
+	 			   exit(EXIT_FAILURE);
+				}                            
+				break;   		
+        		case 2://
+             		        fd = open(argv2[0], O_CREAT | O_WRONLY , S_IRUSR | S_IWUSR | S_IXUSR);
+              			dup2(fd,2);        	
+  	 			if(execvp(argv[0], argv) == -1)
+				{
+				   fprintf(stderr, "%s is not a valid command\n",argv[0]);
+	 			   exit(EXIT_FAILURE);
+	 			}
+	 			break;               	
+        		case 3://
+                		fd = open(argv2[0], O_CREAT | O_WRONLY | O_APPEND , S_IRUSR | S_IWUSR | S_IXUSR);
+               			dup2(fd,1);        		
+                		execvp(argv[0], argv); 
+                		break;
+        		case 4://
+        			file = open(argv2[0], O_CREAT | O_WRONLY | O_APPEND , S_IRUSR | S_IWUSR | S_IXUSR);
+                		dup2(file,2);
+               			execvp(argsv[0], argsv);
+               			break;
+        		case 5://
+				fd = open(argv2[0], O_CREAT | O_WRONLY , S_IRUSR | S_IWUSR | S_IXUSR);
+				dup2(fd,1);
+				dup2(fd,2);
+				execvp(argv[0], argv);       
+				break;		
+        		case 6://
+				fd = open(argv2[0], O_CREAT | O_RDONLY , S_IRUSR | S_IWUSR | S_IXUSR);
+				dup2(fd,0);
+				execvp(argv[0], argv); 
+				break;    		
+        		case 7://
+				int fd2[2];
+				pipe(fd2);
+				pid2 = fork();
+				if (pid2 < 0){
+				    printf("Fork2 Failed\n");
+				}
+				else if (pid2 == 0){
+				    dup2(fd2[1],1);
+				    close(fd2[0]);
+				    execvp(argv[0], argv);
+				}
+				else 
+				{
+				    dup2(fd2[0],0);
+				    close(fd2[1]);
+				    execvp(argv2[0], argv2);   
+				}   
+				break;  		
+        		default:
+        		
+		}
+}
 
 int count_args(char* line)
 {
@@ -54,11 +189,12 @@ int count_args(char* line)
    return words;
 }
 
+
 char **build_argv(char* line)
 {
    int argc = count_args(line);
    ar.c = argc;
-   int i;
+   int i, act;
    char *new;
    char **argv;
 
@@ -89,8 +225,15 @@ char **build_argv(char* line)
          fprintf(stderr, "malloc() failure -- out of memory");
          exit(EXIT_FAILURE);
       }
-      strcpy(argv[i], line);
-
+      act = isRedir(line);
+      if(ar.sel != act)
+      {
+      	 fprintf(stderr, "Act != ar.sel");
+      }
+      if(ar.sel == 0 )
+      {
+      	strcpy(argv[i], line);
+      }
 
       line = new+1;
    }
