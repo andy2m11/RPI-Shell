@@ -45,25 +45,25 @@ int isRedir(char* arg)
 		case '>':
 			if(arg[1] == '>')
 			{
-//				fprintf(stderr, "case: %c\n", arg[0]);
+				fprintf(stderr, "case: %c\n", arg[0]);
 				ar.sel = 3;
 				act = 3;
 			}
 			else
 			{
-				//fprintf(stderr, "case: %c\n", arg[0]);			
+				fprintf(stderr, "case: %c\n", arg[0]);			
 				ar.sel = 1;
 				act = 1;
 			}
 			
 			break;	
 		case '1':
-			//fprintf(stderr, "case: %c\n", arg[0]);		
+			fprintf(stderr, "case: %c\n", arg[0]);		
 			ar.sel = 1;
 			act = 1;
 			break;
 		case '2':
-			//fprintf(stderr, "case: %c\n", arg[0]);
+			fprintf(stderr, "case: %c\n", arg[0]);
 			if(arg[1] == '>' && arg[2] == '>')
 			{
 				ar.sel = 4;
@@ -77,17 +77,17 @@ int isRedir(char* arg)
 			
 			break;
 		case '&':
-			//fprintf(stderr, "case: %c\n", arg[0]);		
+			fprintf(stderr, "case: %c\n", arg[0]);		
 			ar.sel = 5;
 			act = 5;
 			break;
 		case '<':
-			//fprintf(stderr, "case: %c\n", arg[0]);		
+			fprintf(stderr, "case: %c\n", arg[0]);		
 			ar.sel = 6;
 			act = 6;
 			break;
 		case '|':
-			//fprintf(stderr, "case: %c\n", arg[0]);		
+			fprintf(stderr, "case: %c\n", arg[0]);		
 			ar.sel = 7;
 			act = 7;
 			break;
@@ -229,7 +229,7 @@ int count_args(char* line)
 }
 
 
-char **build_argv(char* line, int *act, char **argv2)
+char **build_argv(char* line, int *act)
 {
    int argc = count_args(line);
    ar.c = argc;
@@ -238,7 +238,6 @@ char **build_argv(char* line, int *act, char **argv2)
    char **argv;
    int arg_count = 0;
    int final = 0;
-   int kk = 0;
    if(argc ==0)
    {
       return NULL;
@@ -254,8 +253,8 @@ char **build_argv(char* line, int *act, char **argv2)
    for(i=0; i<argc; i++)
    {
  	      *act = isRedir(line);
- 	      if(ar.sel != *act)
-	      {    fprintf(stderr, "Act:%d != ar.sel:%d\n", *act, ar.sel);	      }
+ 	      if(ar.sel != act)
+	      {    fprintf(stderr, "Act != ar.sel\n");	      }
 
 	      while(isspace(*line))
 	      {
@@ -274,20 +273,8 @@ char **build_argv(char* line, int *act, char **argv2)
 	      
 	      if(ar.sel == 0 )
 	      {
-	      	if(final == 0)
-	      	{
-	      	 
-	      	  strcpy(argv[i], line);
-	      	  fprintf(stderr,"argv:%s\n",argv[i]);
-	      	  arg_count++;
-	        }
-	        else
-	        {
-
-	          strcpy(argv2[kk], line);
-	          fprintf(stderr,"argv2:%s\n",argv2[kk]);
-	          kk++;
-	        }
+	      	strcpy(argv[i], line);
+	      	arg_count++;
 	      }
 	      else
 	      {
@@ -303,9 +290,106 @@ char **build_argv(char* line, int *act, char **argv2)
    return argv;
 }
 
-void print_argv(char **argv)
+
+int main(void)
 {
-   int i;
+   pid_t  child_pid;
+//   char  line[MAX_LINE];
+   char  *line_res;
+   char **argv;
+   int act = 0;
+   char* line;
+   while(1)
+   {
+//      ar.pval = "~/Git/RPI-SHELL/";
+//      myftw(ar.pval,myfunc);
+      fprintf(stderr,"%s","$ ");
+      line_res = fgets(line, MAX_LINE, stdin);
+      if(!line_res)
+      {	 break;  }
+
+ /////////////////////////////////////////////////////////////////////
+   int argc = 0;
+  	//-------------------
+  	
+   int words=0, in_word=0;  
+   int redirect = 0;
+   while(*line)
+   {
+      if(isspace(*line))
+      {
+	 in_word = 0;
+      }
+      else
+      {
+	 if(in_word == 0)
+	 {
+//	    redirect = isRedir(line);
+//	    if(redirect == 0)
+//	    {
+	      words++;
+	      in_word = 1;
+//	    }
+	 }
+      }
+      line++;
+   }
+   
+   //-----------------------------
+   ar.c = argc;
+   int i, fdone; fdone = 0; 
+   char *new;
+   int arg_count = 0;
+   int final = 0;
+
+
+   argv = malloc(sizeof(char*)*(argc+1));
+   if(!argv)
+   {
+      fprintf(stderr, "malloc() failure -- out of memory");
+      exit(EXIT_FAILURE);
+   }
+
+   for(i=0; i<argc; i++)
+   {
+ 	      act = isRedir(line);
+ 	      if(ar.sel != act)
+	      {    fprintf(stderr, "Act != ar.sel\n");	      }
+
+	      while(isspace(*line))
+	      {
+		 line++;
+	      }
+	      for(new=line; *new && !isspace(*new)/* && (act == 0)*/; new++);
+	      /* Empty body */
+	      *new = '\0';
+	      argv[i] = malloc(strlen(line)+1);
+	      if(!argv)
+	      {
+		 fprintf(stderr, "malloc() failure -- out of memory\n");
+		 exit(EXIT_FAILURE);
+	      }
+	      fprintf(stderr, "argc %d\n", argc);
+	      
+	      if(ar.sel == 0 )
+	      {
+	      	strcpy(argv[i], line);
+	      	arg_count++;
+	      }
+	      else
+	      {
+	      	ar.rplace = i;
+	        fprintf(stderr, "sel is:%d   Line is:%s\n",ar.sel,line);
+		final = ar.sel;
+	      }
+	      line = new+1;
+   }
+   argv[i] = NULL;
+   ar.c = arg_count;
+   act = final;
+
+      //////////////////////////////////////////////////////////////
+
    printf("Command: %s\n", argv[0]);
    printf("%s","Arguments:\n");
    for(i=1; argv[i]; i++)
@@ -313,86 +397,9 @@ void print_argv(char **argv)
       printf("argv[%d]: ", i);
       printf("%s\n", argv[i]);
    }
-}
-
-int main(void)
-{
-   pid_t  child_pid;
-   char  line[MAX_LINE];
-   char  *line_res;
-   char **argv;
-   int act = 0;
-   int atest = 0;
-   char **argv2;
-   char **args;
-   
-   args = malloc(MAX_LINE *sizeof(char*));
-   
-   while(1)
-   {
-
-      fprintf(stderr,"%s","$ ");
-      line_res = fgets(line, MAX_LINE, stdin);
-      if(!line_res)
-      {	 break;  }
-      
-   
-        int len = strlen(line);
-        if( len > 0 && line[len-1] == '\n')
-        {   line[len-1] = '\0';	}
-        
-        //separate input string into tokens and store in args[]
-        int argc = 0;
-        char *token;
-        token = strtok(line," ");
-        while (token != NULL) {
-            args[argc] = token;
-            token = strtok (NULL," ");
-            argc++;
-        }
-        
-    
-//     argv = build_argv(line, &act, argv2);    
-//      fprintf(stderr,"act is ====%d",act);
-      print_argv(args);
-      int ii = 0;
-      
-      for(ii=0; ii<argc; ii++)
-      {
-       act = isRedir(args[ii]);
-      
-      }
-      
-      
-      
+      ///////////////////////////////////////////////////////////////////
       doarg(argv, act);
- /*
-      child_pid = fork();
-      if(child_pid == -1)
-      {
-	 fprintf(stderr, "%s\n", "fork() failure");
-	 exit(EXIT_FAILURE);
-      }
-      if(child_pid == 0) 
-      {
-	 setpgid(0,0);
-	 if(execvp(argv[0], argv) == -1)
-	 {
-	    fprintf(stderr, "%s is not a valid command\n",argv[0]);
-	    exit(EXIT_FAILURE);
-	 }
-      }
-      else
-      {
-	 setpgid(child_pid, child_pid);
-	 if(wait(NULL) == -1)
-	 {
-	    fprintf(stderr, "%s\n", "wait() failure");
-	    exit(EXIT_FAILURE);
-	 }
-	 free(argv);
-      }  
-     */    
+ 
    }
 
    return EXIT_SUCCESS;
