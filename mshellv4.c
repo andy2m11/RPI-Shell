@@ -6,21 +6,12 @@
 #include <unistd.h>
 #include <errno.h>
 #include  <signal.h>
-#include  <sys/types.h>
 #include  <fcntl.h>
+#include  <linux/stat.h>
 
 #define MAX_LINE 1024
 /*
-cmd > file Redirect the standard output (stdout) of cmd to a file
-cmd 1> file Same as cmd > file. 1 is the default file descriptor (fd) for stdout.
-cmd 2> file Redirect the standard error (stderr) of cmd to a file. 2 is the default fd for stderr.
-cmd >> file Append stdout of cmd to a file.
-cmd 2>> file Append stderr of cmd to a file.
-cmd &> file Redirect stdout and stderr of cmd to a file
-cmd < file Redirect the contents of the file to the standard input (stdin) of cmd.
-cmd1 | cmd2 Redirect stdout of cmd1 to stdin of cmd2.
-*/
-struct arguments{
+struct Arguments{
 	int rc;		//redirect stdout to file	
 	int rc1;	//""
 	int rc2;	//redirect stderr to file
@@ -35,8 +26,9 @@ struct arguments{
 	char *cmd1;
 	char *cmd2;
 	int rplace;
-} ar;
-
+}ar;
+*/
+//This is where the action for redirection and pipes are done
 int isRedir(char* arg)
 {
 	int act = 0;
@@ -46,54 +38,54 @@ int isRedir(char* arg)
 			if(arg[1] == '>')
 			{
 //				fprintf(stderr, "case: %c\n", arg[0]);
-				ar.sel = 3;
+//				ar.sel = 3;
 				act = 3;
 			}
 			else
 			{
-				//fprintf(stderr, "case: %c\n", arg[0]);			
-				ar.sel = 1;
+			fprintf(stderr, "case: %c\n", arg[0]);			
+//				ar.sel = 1;
 				act = 1;
 			}
 			
 			break;	
 		case '1':
 			//fprintf(stderr, "case: %c\n", arg[0]);		
-			ar.sel = 1;
+//			ar.sel = 1;
 			act = 1;
 			break;
 		case '2':
 			//fprintf(stderr, "case: %c\n", arg[0]);
 			if(arg[1] == '>' && arg[2] == '>')
 			{
-				ar.sel = 4;
+//				ar.sel = 4;
 				act = 4;
 			}
 			else
 			{
-				ar.sel = 2;
+//				ar.sel = 2;
 				act = 2;
 			}
 			
 			break;
 		case '&':
 			//fprintf(stderr, "case: %c\n", arg[0]);		
-			ar.sel = 5;
+//			ar.sel = 5;
 			act = 5;
 			break;
 		case '<':
 			//fprintf(stderr, "case: %c\n", arg[0]);		
-			ar.sel = 6;
+//			ar.sel = 6;
 			act = 6;
 			break;
 		case '|':
 			//fprintf(stderr, "case: %c\n", arg[0]);		
-			ar.sel = 7;
+//			ar.sel = 7;
 			act = 7;
 			break;
 		default:
-			fprintf(stderr, "Default Entered\n");		
-			ar.sel = 0;
+//			fprintf(stderr, "Default Entered\n");		
+//			ar.sel = 0;
 			act = 0;
 			break;
 	}
@@ -102,40 +94,50 @@ int isRedir(char* arg)
 
 return act;
 }
-
-int doarg(char **argv, int act)
+//This is where the arguments are run into execvp depending on the cases from isRedir()
+int doarg(char **argv, char **argv2, int act)
 {
        int fd;
        int fd2[2];
        pid_t pid, pid2;
-       char ** argv2;
-       fprintf(stderr, "argv[0]:%s, placement:%d, aact:%d, argv[3]:%s \n", argv[0], ar.rplace, act, argv[ar.rplace+1]);
+
+//       fprintf(stderr, "argv[0]:%s, placement:%d, aact:%d, argv[3]:%s \n", argv[0], ar.rplace, act, argv[ar.rplace+1]);
        
        
        pid = fork();
-  
-        if (pid < 0){
-            printf("Fork Failed\n");
-        }
+       if(pid < 0)
+       {
+	 fprintf(stderr, "%s\n", "fork() failure");
+	 exit(EXIT_FAILURE);
+       }
+
         else if (pid == 0) // child process 
         { 
         	switch(act)
         	{
+
         		case 0:// no redirection or pipes
         			setpgid(0,0);          			
-	 			execvp(argv[0], argv);
+  	 			if(execvp(argv[0], argv) == -1)
+				{
+				   fprintf(stderr, "%s is not a valid command\n",argv[0]);
+	 			   exit(EXIT_FAILURE);
+       				}
 				break;
-      			case 1:// > or a 1>
+      			case 1:// > or a 1> //cmd > file Redirect the standard output (stdout) of cmd to a file
 	      			setpgid(0,0);
-       fprintf(stderr, "argv[0]:%s, a[1]:%s, argv[2]:%s \n", argv[0], argv[1], argv[ar.rplace+1]); 	      			
-             			fd = open(argv[ar.rplace+1], O_CREAT | O_WRONLY , S_IRUSR | S_IWUSR | S_IXUSR);
-              			dup2(fd,1); 
-                 		argv[1] = '\0';
-              			argv[2] = '\0';             			
-	 			execvp(argv[0], argv);
-                       
+ //    				fprintf(stderr, "argv[0]:%s, a[1]:%s, argv[2]:%s \n", argv[0], argv[1], argv2[0]); 	   
+             			fd = open(argv2[0], O_CREAT | O_WRONLY , S_IRUSR | S_IWUSR | S_IXUSR);
+              			dup2(fd,1);          			
+  	 			if(execvp(argv[0], argv) == -1)
+				{
+				   fprintf(stderr, "%s is not a valid command\n",argv[0]);
+	 			   exit(EXIT_FAILURE);
+	 			}
 				break;   		
-        		case 2://2>
+        		case 2://2>file Redirect the standard error (stderr) of cmd to a file. 2 is the default fd for stderr.
+				setpgid(0,0);
+//				fprintf(stderr, "argv[0]:%s, a[1]:%s, argv[2]:%s \n", argv[0], argv[1], argv2[0]); 
              		        fd = open(argv2[0], O_CREAT | O_WRONLY , S_IRUSR | S_IWUSR | S_IXUSR);
               			dup2(fd,2);        	
   	 			if(execvp(argv[0], argv) == -1)
@@ -144,28 +146,50 @@ int doarg(char **argv, int act)
 	 			   exit(EXIT_FAILURE);
 	 			}
 	 			break;               	
-        		case 3://>>
-                		fd = open(argv2[0], O_CREAT | O_WRONLY | O_APPEND , S_IRUSR | S_IWUSR | S_IXUSR);
+        		case 3://>>file Append stdout of cmd to a file.
+				setpgid(0,0);
+//				fprintf(stderr, "argv[0]:%s, a[1]:%s, argv[2]:%s \n", argv[0], argv[1], argv2[0]); 
+                		fd = open((char*)argv2[0], O_CREAT | O_WRONLY | O_APPEND , S_IRUSR | S_IWUSR | S_IXUSR);
                			dup2(fd,1);        		
-                		execvp(argv[0], argv); 
+  	 			if(execvp(argv[0], argv) == -1)
+				{
+				   fprintf(stderr, "%s is not a valid command\n",argv[0]);
+	 			   exit(EXIT_FAILURE);
+	 			}
                 		break;
-        		case 4://2>>
+        		case 4://2>>file Append stderr of cmd to a file.
+				setpgid(0,0);
         			fd = open(argv2[0], O_CREAT | O_WRONLY | O_APPEND , S_IRUSR | S_IWUSR | S_IXUSR);
                 		dup2(fd,2);
-               			execvp(argv[0], argv);
+  	 			if(execvp(argv[0], argv) == -1)
+				{
+				   fprintf(stderr, "%s is not a valid command\n",argv[0]);
+	 			   exit(EXIT_FAILURE);
+	 			}
                			break;
-        		case 5://&
+        		case 5://&file Redirect stdout and stderr of cmd to a file
+				setpgid(0,0);
 				fd = open(argv2[0], O_CREAT | O_WRONLY , S_IRUSR | S_IWUSR | S_IXUSR);
 				dup2(fd,1);
 				dup2(fd,2);
-				execvp(argv[0], argv);       
+  	 			if(execvp(argv[0], argv) == -1)
+				{
+				   fprintf(stderr, "%s is not a valid command\n",argv[0]);
+	 			   exit(EXIT_FAILURE);
+	 			}      
 				break;		
-        		case 6:// <
+        		case 6:// <file Redirect the contents of the file to the standard input (stdin) of cmd.
+				setpgid(0,0);
 				fd = open(argv2[0], O_CREAT | O_RDONLY , S_IRUSR | S_IWUSR | S_IXUSR);
 				dup2(fd,0);
-				execvp(argv[0], argv); 
+  	 			if(execvp(argv[0], argv) == -1)
+				{
+				   fprintf(stderr, "%s is not a valid command\n",argv[0]);
+	 			   exit(EXIT_FAILURE);
+	 			}
 				break;    		
-        		case 7:// |
+        		case 7:// |cmd1 | cmd2 Redirect stdout of cmd1 to stdin of cmd2.
+				setpgid(0,0);
 				pipe(fd2);
 				pid2 = fork();
 				if (pid2 < 0){
@@ -174,150 +198,64 @@ int doarg(char **argv, int act)
 				else if (pid2 == 0){
 				    dup2(fd2[1],1);
 				    close(fd2[0]);
-				    execvp(argv[0], argv);
+  	 			    if(execvp(argv[0], argv) == -1)
+				    {
+				       fprintf(stderr, "%s is not a valid command\n",argv[0]);
+	 			       exit(EXIT_FAILURE);
+	 		   	    }
 				}
 				else 
 				{
 				    dup2(fd2[0],0);
-				    close(fd2[1]);
-				    execvp(argv2[0], argv2);   
+				    close(fd2[1]);  
+  	 			    if(execvp(argv2[0], argv2) == -1)
+				    {
+				       fprintf(stderr, "%s is not a valid command\n",argv[0]);
+	 			       exit(EXIT_FAILURE);
+	 		   	    }
 				}   
 				break;  		
         		//default:
         		
 		}
+/*	
+		if(execvp(argv[0], argv) == -1)
+		{
+		   fprintf(stderr, "%s is not a valid command\n",argv[0]);
+		   exit(EXIT_FAILURE);
+		}
+*/
 	}
-	else if (ar.sel != 5){ /* parent process */
-	printf("running parent\n");
-            pid_t childpid;
+	else if (act != 5){ // parent process 
+//          printf("running parent\n");
+            pid_t child_pid;
             int status;
-            childpid = wait(&status); //wait the child process to finish
-            if (childpid < 0){
-                printf("wait error");
-                exit(1);
+            child_pid = wait(&status); //wait the child process to finish
+            if (child_pid < 0)
+     	    {
+	       fprintf(stderr, "%s\n", "wait() error");
+	       exit(EXIT_FAILURE);
             }
         }
      return 0;   
 }
 
-
-int count_args(char* line)
-{
-   int words=0, in_word=0;  
-   int redirect = 0;
-   while(*line)
-   {
-      if(isspace(*line))
-      {
-	 in_word = 0;
-      }
-      else
-      {
-	 if(in_word == 0)
-	 {
-//	    redirect = isRedir(line);
-//	    if(redirect == 0)
-//	    {
-	      words++;
-	      in_word = 1;
-//	    }
-	 }
-      }
-      line++;
-   }
-   return words;
-}
-
-
-char **build_argv(char* line, int *act, char **argv2)
-{
-   int argc = count_args(line);
-   ar.c = argc;
-   int i, fdone; fdone = 0; 
-   char *new;
-   char **argv;
-   int arg_count = 0;
-   int final = 0;
-   int kk = 0;
-   if(argc ==0)
-   {
-      return NULL;
-   }
-
-   argv = malloc(sizeof(char*)*(argc+1));
-   if(!argv)
-   {
-      fprintf(stderr, "malloc() failure -- out of memory");
-      exit(EXIT_FAILURE);
-   }
-
-   for(i=0; i<argc; i++)
-   {
- 	      *act = isRedir(line);
- 	      if(ar.sel != *act)
-	      {    fprintf(stderr, "Act:%d != ar.sel:%d\n", *act, ar.sel);	      }
-
-	      while(isspace(*line))
-	      {
-		 line++;
-	      }
-	      for(new=line; *new && !isspace(*new)/* && (act == 0)*/; new++);
-	      /* Empty body */
-	      *new = '\0';
-	      argv[i] = malloc(strlen(line)+1);
-	      if(!argv)
-	      {
-		 fprintf(stderr, "malloc() failure -- out of memory\n");
-		 exit(EXIT_FAILURE);
-	      }
-	      fprintf(stderr, "argc %d\n", argc);
-	      
-	      if(ar.sel == 0 )
-	      {
-	      	if(final == 0)
-	      	{
-	      	 
-	      	  strcpy(argv[i], line);
-	      	  fprintf(stderr,"argv:%s\n",argv[i]);
-	      	  arg_count++;
-	        }
-	        else
-	        {
-
-	          strcpy(argv2[kk], line);
-	          fprintf(stderr,"argv2:%s\n",argv2[kk]);
-	          kk++;
-	        }
-	      }
-	      else
-	      {
-	      	ar.rplace = i;
-	        fprintf(stderr, "sel is:%d   Line is:%s\n",ar.sel,line);
-		final = ar.sel;
-	      }
-	      line = new+1;
-   }
-   argv[i] = NULL;
-   ar.c = arg_count;
-   *act = final;
-   return argv;
-}
-
-void print_argv(char **argv)
+//Print out all the arguments
+void print_args(char **args)
 {
    int i;
-   printf("Command: %s\n", argv[0]);
+   printf("Command: %s\n", args[0]);
    printf("%s","Arguments:\n");
-   for(i=1; argv[i]; i++)
+   for(i=1; args[i]; i++)
    {
       printf("argv[%d]: ", i);
-      printf("%s\n", argv[i]);
+      printf("%s\n", args[i]);
    }
 }
 
 int main(void)
 {
-   pid_t  child_pid;
+
    char  line[MAX_LINE];
    char  *line_res;
    char **argv;
@@ -325,9 +263,10 @@ int main(void)
    int atest = 0;
    char **argv2;
    char **args;
-   
+   int argc;
    args = malloc(MAX_LINE *sizeof(char*));
-   
+   argv = malloc(MAX_LINE *sizeof(char*));
+   argv2 = malloc(MAX_LINE *sizeof(char*));
    while(1)
    {
 
@@ -336,12 +275,12 @@ int main(void)
       if(!line_res)
       {	 break;  }
       
-   
+
         int len = strlen(line);
         if( len > 0 && line[len-1] == '\n')
         {   line[len-1] = '\0';	}
         
-        //separate input string into tokens and store in args[]
+   	//use strtok function to split the arguments up    
         int argc = 0;
         char *token;
         token = strtok(line," ");
@@ -350,50 +289,56 @@ int main(void)
             token = strtok (NULL," ");
             argc++;
         }
-        
-    
-//     argv = build_argv(line, &act, argv2);    
-//      fprintf(stderr,"act is ====%d",act);
-      print_argv(args);
-      int ii = 0;
       
+
+      print_args(args);
+
+      int ii = 0;
+      char *chktest;
+      int final = 0;
+      int nulpos = 0;
+      char *temp1;     
+      int background = 0;
+      int kk = 0;
+
+      //Go through the arguments. If there is a special character such as redirection, it will seperate the arguments into two lists.
       for(ii=0; ii<argc; ii++)
       {
-       act = isRedir(args[ii]);
-      
+//         fprintf(stderr,"argc:%s\n",args[ii]);
+         act = isRedir(args[ii]);
+ //        fprintf(stderr," arg count=%d__act =%d\n",argc, act);
+      	 if(act == 0)
+    	 {
+ //     	   fprintf(stderr,"ii is:%d, sel=%d\n",ii, act);
+	   chktest = args[ii];
+           argv[ii] = chktest;
+ //  	   fprintf(stderr,"argv:%s, sel=%d\n",argv[ii], act);
+		if(final == 0)
+		{ nulpos++;	}
+       	 }
+      	 else
+      	 {
+//		fprintf(stderr,"FINAL argv%s__________act:%d____\n",argv[ii], act);
+       		if(final == 0)
+		{
+			final = act;
+			break;
+		}
+      	 }
       }
-      
-      
-      
-      doarg(argv, act);
- /*
-      child_pid = fork();
-      if(child_pid == -1)
+      //Begin second list from where the special character left off. Can only handle redirects/pipes one at a time currently.
+      for (ii = nulpos+1; ii < argc; ii++)
       {
-	 fprintf(stderr, "%s\n", "fork() failure");
-	 exit(EXIT_FAILURE);
+	temp1 = args[ii];
+	argv2[kk] = temp1;
+//   	   fprintf(stderr,"In second for argv2:%s, sel=%d\n",argv2[kk], act);
+	kk++;
       }
-      if(child_pid == 0) 
-      {
-	 setpgid(0,0);
-	 if(execvp(argv[0], argv) == -1)
-	 {
-	    fprintf(stderr, "%s is not a valid command\n",argv[0]);
-	    exit(EXIT_FAILURE);
-	 }
-      }
-      else
-      {
-	 setpgid(child_pid, child_pid);
-	 if(wait(NULL) == -1)
-	 {
-	    fprintf(stderr, "%s\n", "wait() failure");
-	    exit(EXIT_FAILURE);
-	 }
-	 free(argv);
-      }  
-     */    
-   }
+              
+//      fprintf(stderr,"%s","starting doarg ");
+      doarg(argv, argv2, final);
+ 
+     }
 
    return EXIT_SUCCESS;
 }
